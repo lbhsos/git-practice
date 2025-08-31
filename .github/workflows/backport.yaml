@@ -33,7 +33,7 @@ jobs:
         if: ${{ steps.extract.outputs.version != '' }}
         run: |
           git init .
-          git remote add upstream https://github.com/lbhsos/git-practice.git
+          git remote add upstream https://github.com/opensearch-project/OpenSearch.git
           git fetch upstream ${{ steps.extract.outputs.version }}
           git checkout -b backport-target FETCH_HEAD
 
@@ -47,10 +47,7 @@ jobs:
           {
             git cherry-pick ${{ github.event.pull_request.head.sha }}
           } &> err.log || {
-            echo "=== git cherry-pick error log ==="
-            cat err.log
-            echo "================================="
-            grep "CONFLICT" err.log | sed -E 's/^CONFLICT.*: ([^ ]+).*/\1/' > conflict.txt 
+            cat err.log > conflict.txt
             exit 1
           }
 
