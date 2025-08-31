@@ -1,0 +1,59 @@
+name: Backport Conflict Check
+
+on:
+  pull_request:
+    types: [labeled, synchronize]
+
+jobs:
+  check-backport:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Extract backport label
+        id: extract
+        run: |
+          echo 'Extracting backport label...'
+          version=$(jq -r '
+            .pull_request.labels // []
+            | map(.name)
+            | map(select(startswith("backport ")))
+            | first
+            | sub("^backport "; "")
+            ' "$GITHUB_EVENT_PATH")
+
+          if [[ -z "$version" ]]; then
+            echo "No backport label found. Skipping."
+            exit 0
+          fi
+
+          echo "Backport version: '$version'"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout backport target branch (from upstream)
+        run: |
+          git init .
+          git remote add upstream https://github.com/lbhsos/git-practice.git
+          git fetch upstream ${{ steps.extract.outputs.version }}
+          git checkout -b backport-target FETCH_HEAD
+
+      - name: Attempt cherry-pick of PR commits
+        if: steps.extract.outputs.version != ''
+        run: |
+          git cherry-pick ${{ github.event.pull_request.head.sha }} || echo "CONFLICT" > conflict.txt
+
+      - name: Report conflicts as PR comment
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            let conflictMsg = "⚠️ Backport conflict detected for branch `${{ steps.extract.outputs.version }}`\n";
+            if (fs.existsSync('conflict.txt')) {
+              const conflicts = fs.readFileSync('conflict.txt', 'utf8');
+              conflictMsg += "Conflicting files:\n```\n" + conflicts + "\n```";
+            }
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: conflictMsg
+            });
