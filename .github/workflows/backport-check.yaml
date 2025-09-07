@@ -19,16 +19,13 @@ jobs:
             | first // ""
             | sub("^backport "; "")
             ' "$GITHUB_EVENT_PATH")
-
           if [[ -z "$version" || "$version" == "null" ]]; then
             echo "No backport label found. Skipping."
             echo "version=" >> "$GITHUB_OUTPUT"
             exit 0
           fi
-
           echo "Backport version: '$version'"
           echo "version=$version" >> "$GITHUB_OUTPUT"
-
       - name: Checkout backport target branch (from upstream)
         if: ${{ steps.extract.outputs.version != '' }}
         run: |
@@ -36,10 +33,12 @@ jobs:
           git remote add upstream https://github.com/opensearch-project/OpenSearch.git
           git fetch upstream ${{ steps.extract.outputs.version }}
           git checkout -b backport-target FETCH_HEAD
-
           git remote add prrepo https://github.com/${{ github.event.pull_request.head.repo.full_name }}.git
           git fetch prrepo ${{ github.event.pull_request.head.ref }}
-
+      - name: Set git identity
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
       - name: Attempt cherry-pick of PR commits
         if: ${{ steps.extract.outputs.version != '' }}
         run: |
@@ -50,7 +49,6 @@ jobs:
             cat err.log > conflict.txt
             exit 1
           }
-
       - name: Report conflicts as PR comment
         if: ${{ steps.extract.outputs.version != '' && failure() }}
         uses: actions/github-script@v7
@@ -68,4 +66,3 @@ jobs:
               repo: context.repo.repo,
               body: conflictMsg
             });
-
